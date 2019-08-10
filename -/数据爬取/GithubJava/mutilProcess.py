@@ -1,0 +1,153 @@
+#coding:utf-8
+import urllib2
+import urllib
+import re
+import time
+import os
+import multiprocessing
+import random
+
+def GetDownloadURL(URL, UNum, PNum, SNum, NumInPage, start, end):
+    #print 'Start parse Download URL:' + URL
+    res = urllib2.urlopen(URL)
+    Page = res.read()
+    DownloadURLPattern = re.compile(r'<a href="/(\S*)"(\s*)class="btn btn-outline get-repo-btn(\s*)"')
+    mat = re.search(DownloadURLPattern, Page)
+    if mat:
+        DownloadURL = "https://github.com/" + mat.group(1)
+        #print 'URL find:' + DownloadURL
+        #修改，文件下载路径
+        filename = 'D:\\GitJavaMultiProcess\\' + str(start) + 'TO' + str(end) + '\\' \
+                   + 'S' + str(SNum) + '_P' + str(PNum) + '_' + str(NumInPage) + '_No' + str(UNum) + '.zip'
+        urllib.urlretrieve(DownloadURL, filename)
+        print 'Download Finished! ' + filename
+def Git(start, end):
+    #修改，文件下载路径
+    file_dir = 'D:\\GitJavaMultiProcess\\'+ str(start) + 'TO' + str(end) + '\\'
+    if not os.path.isdir(file_dir):
+        os.makedirs(file_dir)
+
+    #从配置文件读取上次爬到的数据位置
+    ##################
+    #小于10MB的配置文件
+    #修改
+    ConfFile = open('C:/Users/wdz/Desktop/PythonProject/GithubJava/conf/' + str(start) + 'TO' + str(end), 'r')
+    ##################
+
+
+    ##################
+    #大于10MB的配置文件
+    #ConfFile = open('C:/Users/wdz/Desktop/PythonProject/GithubJava/conf2/' + str(start) + 'TO' + str(end), 'r')
+    ##################
+
+
+    #已经爬到的URL数量
+    URLNum = int(ConfFile.readline())
+    #当前爬取的星数
+    SNum = int(ConfFile.readline())
+    #爬到第多少页
+    PageNum = int(ConfFile.readline())
+    #print URLNum,SNum,PageNum
+    ConfFile.close()
+
+    for StarNum in range(SNum, end):
+        #print 'Current Star:' + str(StarNum)
+        if StarNum == SNum:
+            #如果是刚开始，应该从配置文件中的页面开始继续爬
+
+            ##############
+            # 小于10MB (size%3A%3C10240)的链接
+            NextPageURL = "https://github.com/search?l=%22&p="+ str(PageNum) \
+                          + "&q=language%3AJava+stars%3A"+ str(StarNum) \
+                          +"+size%3A%3C10240&ref=advsearch&type=Repositories&utf8=%E2%9C%93%22"
+            ##############
+
+            ##############
+            # 这是大于10MB (size%3A%3E10240)的链接
+            #NextPageURL = "https://github.com/search?l=%22&p=" + str(PageNum) \
+            #              + "&q=language%3AJava+stars%3A" + str(StarNum) \
+            #              + "+size%3A%3E10240&ref=advsearch&type=Repositories&utf8=%E2%9C%93%22"
+            ##############
+            PageNum = PageNum - 1
+        else:
+            #否则从第一页开始爬
+
+            ##############
+            # 这是小于10MB (size%3A%3C10240)的链接
+            NextPageURL = "https://github.com/search?l=%22&p=" + "1" \
+                          + "&q=language%3AJava+stars%3A" + str(StarNum) \
+                          + "+size%3A%3C10240&ref=advsearch&type=Repositories&utf8=%E2%9C%93%22"
+            ##############
+
+            ##############
+            # 这是大于10MB (size%3A%3E10240)的链接
+            #NextPageURL = "https://github.com/search?l=%22&p=" + "1" \
+            #              + "&q=language%3AJava+stars%3A" + str(StarNum) \
+            #              + "+size%3A%3E10240&ref=advsearch&type=Repositories&utf8=%E2%9C%93%22"
+            ##############
+
+            PageNum = 0
+        while (1):
+
+            response = urllib2.urlopen(NextPageURL)
+            Page = response.read()
+            PageNum += 1
+            URLPattern = re.compile(r'<a href="/(\S*/\S*)" class="v-align-middle">(\S*/\S*)</a>')
+            #判断是否有搜索结果
+            NoResPattern = re.compile(r'We couldn’t find any repositories matching')
+            NoResMatch = re.search(NoResPattern, Page)
+            if NoResMatch:
+                #当前星数StarNum没有搜索结果，则跳过后面，搜索下一个星数
+                #print "Star:" + str(StarNum) + " No Res"
+                break
+            else:
+                #print 'Res Matched!'
+                #有搜索结果再一个一个找
+                NumInPage = 0
+                for URLMatch in re.finditer(URLPattern, Page):
+                    NumInPage += 1
+                    #print 'Num In Page:', NumInPage
+                    URL = "https://github.com/" + URLMatch.group(1)
+                    URLNum += 1
+                    r = random.randint(10, 20) * 0.2
+                    time.sleep(r)
+                    #print 'cs:',URL, URLNum, PageNum, StarNum, NumInPage, start, end,
+                    GetDownloadURL(URL, URLNum, PageNum, StarNum, NumInPage, start, end, )
+                NextPagePattern = re.compile(r'<a class="next_page" rel="next" href="/(\S*)">Next</a>')
+                NextPageMatch = re.search(NextPagePattern, Page)
+                if NextPageMatch:
+                    #print 'NextPage Find'
+                    #修改，配置文件路径
+                    NewCF = open('C:/Users/ljy296566/Desktop/PythonProject/GithubJava/conf/' + str(start) + 'TO' + str(end), 'w')
+                    NewCF.write(str(URLNum) + '\n')
+                    NewCF.write(str(StarNum) + '\n')
+                    NewCF.write(str(PageNum+1) + '\n')
+                    print 'Conf File Updated:',URLNum,StarNum,PageNum+1
+                    NewCF.close()
+                    NextPageURL = "https://github.com/" + NextPageMatch.group(1)
+                    time.sleep(1)
+                else:
+                    print 'Star:' + str(StarNum) +'No Next Page'
+                    #修改
+                    NewCF = open('C:/Users/ljy296566/Desktop/PythonProject/GithubJava/conf/' + str(start) + 'TO' + str(end), 'w')
+                    NewCF\
+                        .write(str(URLNum) + '\n')
+                    NewCF.write(str(StarNum + 1) + '\n')
+                    NewCF.write('1\n')
+                    print 'Conf File Updated:', URLNum, StarNum + 1, 1
+                    NewCF.close()
+
+                    break
+
+if __name__ == '__main__':
+    Git(10, 20)
+    # 维持执行的进程总数为processes，当一个进程执行完毕后会添加新的进程进去
+    #pool = multiprocessing.Pool(processes = 8)
+
+    #for i in range(10, 100, 10):
+    #    pool.apply_async(Git, (i, i + 10,))
+
+    #for i in range(100, 1200, 100):
+    #    pool.apply_async(Git, (i, i + 100,))
+    #pool.close()
+    #pool.join()  # 调用join之前，先调用close函数，否则会出错。执行完close后不会有新的进程加入到pool,join函数等待所有子进程结束
